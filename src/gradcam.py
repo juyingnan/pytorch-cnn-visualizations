@@ -6,14 +6,16 @@ Created on Thu Oct 26 11:06:51 2017
 from PIL import Image
 import numpy as np
 import torch
+import sys
+import os
+from misc_functions import get_example_params, save_class_activation_images, get_example_by_filename
 
-from misc_functions import get_example_params, save_class_activation_images
 
-
-class CamExtractor():
+class CamExtractor:
     """
         Extracts cam features from the model
     """
+
     def __init__(self, model, target_layer):
         self.model = model
         self.target_layer = target_layer
@@ -46,10 +48,11 @@ class CamExtractor():
         return conv_output, x
 
 
-class GradCam():
+class GradCam:
     """
         Produces class activation map
     """
+
     def __init__(self, model, target_layer):
         self.model = model
         self.model.eval()
@@ -86,7 +89,7 @@ class GradCam():
         cam = (cam - np.min(cam)) / (np.max(cam) - np.min(cam))  # Normalize between 0-1
         cam = np.uint8(cam * 255)  # Scale between 0-255 to visualize
         cam = np.uint8(Image.fromarray(cam).resize((input_image.shape[2],
-                       input_image.shape[3]), Image.ANTIALIAS))/255
+                                                    input_image.shape[3]), Image.ANTIALIAS)) / 255
         # ^ I am extremely unhappy with this line. Originally resizing was done in cv2 which
         # supports resizing numpy matrices with antialiasing, however,
         # when I moved the repository to PIL, this option was out of the window.
@@ -98,13 +101,32 @@ class GradCam():
 
 if __name__ == '__main__':
     # Get params
-    target_example = 0  # Snake
-    (original_image, prep_img, target_class, file_name_to_export, pretrained_model) =\
-        get_example_params(target_example)
-    # Grad cam
-    grad_cam = GradCam(pretrained_model, target_layer=11)
-    # Generate cam mask
-    cam = grad_cam.generate_cam(prep_img, target_class)
-    # Save mask
-    save_class_activation_images(original_image, cam, file_name_to_export)
-    print('Grad cam completed')
+    # target_example = 0  # Snake
+    file_name_list = list()
+    file_class_list = list()
+
+    # file_name = '01_299.png'
+    # file_class = 1
+    if len(sys.argv) >= 3:
+        file_name_list.append(sys.argv[1])
+        file_class_list.append(int(sys.argv[2]))
+    else:
+        potential_file_list = os.listdir("../input_images/")
+        for file_class in [0, 1]:
+            for file_name in potential_file_list:
+                if file_name.startswith(('00_', '01_', '10_', '11_')):
+                    file_name_list.append(file_name)
+                    file_class_list.append(file_class)
+
+    for file_name, file_class in zip(file_name_list, file_class_list):
+        (original_image, prep_img, target_class, file_name_to_export, pretrained_model) = \
+            get_example_by_filename(file_name, file_class)
+        # get_example_params(target_example)
+
+        # Grad cam
+        grad_cam = GradCam(pretrained_model, target_layer=11)
+        # Generate cam mask
+        cam_mask = grad_cam.generate_cam(prep_img, target_class)
+        # Save mask
+        save_class_activation_images(original_image, cam_mask, file_name_to_export)
+        print('Grad cam completed for {} : {}'.format(file_name, file_class))
