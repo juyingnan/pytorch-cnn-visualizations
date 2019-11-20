@@ -6,7 +6,7 @@ Created on Thu Oct 21 11:09:09 2017
 import os
 import copy
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFont, ImageDraw
 import matplotlib.cm as mpl_color_map
 
 import torch
@@ -74,6 +74,41 @@ def save_class_activation_images(org_img, activation_map, file_name):
     save_image(activation_map, path_to_file)
 
 
+def save_gif_images(org_img, activation_map, gradient, pred, file_name, color_map='hsv'):
+    if not os.path.exists('../results'):
+        os.makedirs('../results')
+    # Grayscale activation map
+    heatmap, heatmap_on_image = apply_colormap_on_image(org_img, activation_map, color_map)
+
+    # Normalize
+    gradient = gradient - gradient.min()
+    gradient /= gradient.max()
+
+    # add text
+    classes = ('no', 'yes')
+    temp_orig = org_img.copy()
+    draw = ImageDraw.Draw(temp_orig)
+    font_size = 24
+    font = ImageFont.truetype(r'C:\Windows\Fonts\Arial.ttf', font_size)
+    draw.text((0, 0), f'Epoch: {file_name.split("_")[-1]}', (255, 255, 255), font=font)
+    draw.text((0, int(font_size * 1.2)), f'Pred:  {pred}', (255, 255, 255), font=font)
+    draw.text((0, int(font_size * 1.2) * 2), f'Truth: {classes[int(file_name[1])]}', (255, 255, 255), font=font)
+
+    # Save image
+    merged_img = np.concatenate([np.dstack((np.array(temp_orig), np.zeros(temp_orig.size, dtype=np.uint8) + 255)),
+                                 np.array(heatmap),
+                                 np.array(heatmap_on_image),
+                                 np.dstack(
+                                     (gradient.transpose(1, 2, 0) * 255,
+                                      np.zeros(gradient.transpose(1, 2, 0).shape[:2], dtype=np.uint8) + 255)),
+                                 ],
+                                axis=1)
+    path_to_file = os.path.join('../results', file_name + '.png')
+    merged_img = Image.fromarray(merged_img.astype('uint8'), 'RGBA')
+    # save_image(merged_img, path_to_file)
+    return merged_img
+
+
 def apply_colormap_on_image(org_im, activation, colormap_name):
     """
         Apply heatmap on image
@@ -87,7 +122,7 @@ def apply_colormap_on_image(org_im, activation, colormap_name):
     no_trans_heatmap = color_map(activation)
     # Change alpha channel in colormap to make sure original image is displayed
     heatmap = copy.copy(no_trans_heatmap)
-    heatmap[:, :, 3] = 0.4
+    heatmap[:, :, 3] = 0.3
     heatmap = Image.fromarray((heatmap * 255).astype(np.uint8))
     no_trans_heatmap = Image.fromarray((no_trans_heatmap * 255).astype(np.uint8))
 
@@ -266,7 +301,7 @@ def get_example_by_filename(filename, file_class):
     # Process image
     prep_img = preprocess_image(original_image)
     # Define model
-    pretrained_model = torch.load(r'C:\Users\bunny\PycharmProjects\KaggleTest\classification\cifar_model.pth',
+    pretrained_model = torch.load(r'C:\Users\bunny\PycharmProjects\KaggleTest\classification\cifar_plane_model.pth',
                                   map_location=lambda storage, loc: storage)
     return (original_image,
             prep_img,
